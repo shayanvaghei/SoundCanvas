@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.Collections;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace API.Models
 {
@@ -8,5 +10,7 @@ namespace API.Models
 
         [Required]
         public string Name { get; set; }
+
+        public ICollection<Artist> Artists { get; set; }
     }
 }
