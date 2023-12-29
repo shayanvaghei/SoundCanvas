@@ -15,6 +15,7 @@ namespace API.Data
 
         public DbSet<Album> Albums { get; set; }
         public DbSet<ArtistAlbumBridge> ArtistAlbumBridge { get; set; }
+        public DbSet<Track> Tracks { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

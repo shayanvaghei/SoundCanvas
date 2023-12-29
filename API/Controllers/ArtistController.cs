@@ -46,7 +46,8 @@ namespace API.Controllers
                     Id = x.Id,
                     Name = x.Name,
                     PhotoUrl = x.PhotoUrl,
-                    Genre = x.Genre.Name
+                    Genre = x.Genre.Name,
+                    AlbumNames = x.Albums.Select(a => a.Album.Name).ToList()
                 }).FirstOrDefault();
 
             if (artist == null)

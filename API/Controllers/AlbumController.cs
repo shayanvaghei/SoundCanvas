@@ -58,7 +58,8 @@ namespace API.Controllers
                         Name = a.Artist.Name,
                         PhotoUrl = a.Artist.PhotoUrl,
                         Genre = a.Artist.Genre.Name
-                    }).ToList()
+                    }).ToList(),
+                    TrackNames = x.Tracks.Select(t => t.Name).ToList()
                 }).FirstOrDefaultAsync();
 
             if (album == null) return NotFound();

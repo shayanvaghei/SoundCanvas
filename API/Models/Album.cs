@@ -12,5 +12,7 @@ namespace API.Models
         public string PhotoUrl { get; set; }
 
         public ICollection<ArtistAlbumBridge> Artists { get; set; }
+
+        public ICollection<Track> Tracks { get; set; }
     }
 }

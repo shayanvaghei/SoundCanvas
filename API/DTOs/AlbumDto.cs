@@ -9,5 +9,6 @@ namespace API.DTOs
         public string PhotoUrl { get; set; }
 
         public List<ArtistDto> Artists { get; set; }
+        public List<string> TrackNames { get; set; }
     }
 }
