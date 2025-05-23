@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace API.Data.Migratons
 {
-    [DbContext(typeof(ApplicationDb))]
+    [DbContext(typeof(Context))]
     [Migration("20231226061404_changeAlbumToAlbums")]
     partial class changeAlbumToAlbums
     {

@@ -1,67 +1,36 @@
-﻿using API.Data;
-using API.DTOs;
+﻿using API.DTOs;
 using API.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
-using System.Linq;
+using System.Threading.Tasks;
 
 namespace API.Controllers
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class GenreController : ControllerBase
+    public class GenreController : ApiCoreController
     {
-        private readonly ApplicationDb _db;
-
-        public GenreController(ApplicationDb db)
-        {
-            _db = db;
-        }
-
         [HttpGet("get-all")]
-        public IActionResult GetAll()
+        public async Task<ActionResult<IEnumerable<GenreDto>>> GetAll()
         {
-            var genres = _db.Genres.ToList();
-            var toReturn = new List<GenreDto>();
-
-            foreach (var genre in genres)
-            {
-                var genreDto = new GenreDto
-                {
-                    Id = genre.Id,
-                    Name = genre.Name,
-                };
-
-                toReturn.Add(genreDto);
-            }
-
-
-            return Ok(toReturn);
+            var genres = await UnitOfWork.GenreRepo.GetAllAsync();
+            return Ok(Mapper.Map<IEnumerable<GenreDto>>(genres));
         }
 
         [HttpGet("get-one/{id}")]
-        public IActionResult GetOne(int id)
+        public async Task<ActionResult<GenreDto>> GetOne(int id)
         {
-            var genre = _db.Genres.Find(id);
+            var genre = await UnitOfWork.GenreRepo.GetFirstOrDefaultAsync(x => x.Id == id);
             if (genre == null)
             {
                 return NotFound();
             }
 
-            var toReturn = new GenreDto
-            {
-                Id = genre.Id,
-                Name = genre.Name,
-            };
-
-            return Ok(toReturn);
+            return Ok(Mapper.Map<GenreDto>(genre));
         }
 
         [HttpPost("create")]
-        public IActionResult Create(GenreAddEditDto model)
+        public async Task<IActionResult> Create(GenreAddEditDto model)
         {
-            if (GenreNameExists(model.Name))
+            if (await GenreNameExistsAsync(model.Name))
             {
                 return BadRequest("Genre name should be unique");
             }
@@ -71,54 +40,47 @@ namespace API.Controllers
                 Name = model.Name.ToLower()
             };
 
-            _db.Genres.Add(genreToAdd);
-            _db.SaveChanges();
+            UnitOfWork.GenreRepo.Add(genreToAdd);
+            await UnitOfWork.CompleteAsync();
 
             return NoContent();
         }
 
         [HttpPut("update")]
-        public IActionResult Update(GenreAddEditDto model)
+        public async Task<IActionResult> Update(GenreAddEditDto model)
         {
-            var fetchedGenre = _db.Genres.Find(model.Id);
+            var fetchedGenre = await UnitOfWork.GenreRepo.GetFirstOrDefaultAsync(x => x.Id == model.Id);
             if (fetchedGenre == null)
             {
                 return NotFound();
             }
 
-            if (GenreNameExists(model.Name))
+            if (await GenreNameExistsAsync(model.Name))
             {
                 return BadRequest("Genre name should be unique");
             }
 
             fetchedGenre.Name = model.Name.ToLower();
-            _db.SaveChanges();
+            await UnitOfWork.CompleteAsync();
 
             return NoContent();
         }
 
         [HttpDelete("delete/{id}")]
-        public IActionResult Delete(int id)
+        public async Task<IActionResult> Delete(int id)
         {
-            var fetchedObj = _db.Genres.Find(id);
+            var fetchedObj = await UnitOfWork.GenreRepo.GetFirstOrDefaultAsync(x => x.Id == id);
             if (fetchedObj == null) return NotFound();
 
-            _db.Genres.Remove(fetchedObj);
-            _db.SaveChanges();
+            UnitOfWork.GenreRepo.Remove(fetchedObj);
+            await UnitOfWork.CompleteAsync();
 
             return NoContent();
         }
 
-        private bool GenreNameExists(string name)
+        private async Task<bool> GenreNameExistsAsync(string name)
         {
-            var fetchedGenre = _db.Genres.FirstOrDefault(x => x.Name.ToLower() == name.ToLower());
-
-            if (fetchedGenre != null)
-            {
-                return true;
-            }
-
-            return false;
+            return await UnitOfWork.GenreRepo.AnyAsync(x => x.Name.ToLower() == name.ToLower());
         }
     }
 }

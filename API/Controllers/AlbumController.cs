@@ -10,58 +10,18 @@ using System.Threading.Tasks;
 
 namespace API.Controllers
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class AlbumController : ControllerBase
+    public class AlbumController : ApiCoreController
     {
-        private readonly ApplicationDb _db;
-
-        public AlbumController(ApplicationDb db)
-        {
-            _db = db;
-        }
-
         [HttpGet("get-all")]
         public async Task<ActionResult<List<AlbumDto>>> GetAll()
         {
-            var albums = await _db.Albums
-            .Select(x => new AlbumDto
-            {
-                Id = x.Id,
-                Name = x.Name,
-                PhotoUrl = x.PhotoUrl,
-                Artists = x.Artists.Select(a => new ArtistDto
-                {
-                    Id = a.Artist.Id,
-                    Name = a.Artist.Name,
-                    PhotoUrl = a.Artist.PhotoUrl,
-                    Genre = a.Artist.Genre.Name
-                }).ToList()
-            }).ToListAsync();
-
-            return albums;
+            return Ok(await UnitOfWork.AlbumRepo.GetAlbumsAsync());
         }
 
         [HttpGet("get-one/{id}")]
         public async Task<ActionResult<AlbumDto>> GetOne(int id)
         {
-            var album = await _db.Albums
-                .Where(x => x.Id == id)
-                .Select(x => new AlbumDto
-                {
-                    Id = x.Id,
-                    Name = x.Name,
-                    PhotoUrl = x.PhotoUrl,
-                    Artists = x.Artists.Select(a => new ArtistDto
-                    {
-                        Id = a.Artist.Id,
-                        Name = a.Artist.Name,
-                        PhotoUrl = a.Artist.PhotoUrl,
-                        Genre = a.Artist.Genre.Name
-                    }).ToList(),
-                    TrackNames = x.Tracks.Select(t => t.Name).ToList()
-                }).FirstOrDefaultAsync();
-
+            var album = await UnitOfWork.AlbumRepo.GetAlbymByIdAsync(id);
             if (album == null) return NotFound();
 
             return album;
@@ -85,11 +45,12 @@ namespace API.Controllers
                 Name = model.Name,
                 PhotoUrl = model.PhotoUrl
             };
-            _db.Albums.Add(albumToAdd);
-            await _db.SaveChangesAsync();
+
+            UnitOfWork.AlbumRepo.Add(albumToAdd);
+            await UnitOfWork.CompleteAsync();
 
             await AssignArtistsToAlbumAsync(albumToAdd.Id, model.ArtistIds);
-            await _db.SaveChangesAsync();
+            await UnitOfWork.CompleteAsync();
 
             return NoContent();
         }
@@ -97,7 +58,7 @@ namespace API.Controllers
         [HttpPut("update")]
         public async Task<IActionResult> Update(AlbumAddEditDto model)
         {
-            var fetchedAlbum = await _db.Albums.Include(x => x.Artists).FirstOrDefaultAsync(x => x.Id == model.Id);
+            var fetchedAlbum = await UnitOfWork.AlbumRepo.GetFirstOrDefaultAsync(x => x.Id == model.Id, includeProperties: "Artists");
             if (fetchedAlbum == null) return NotFound();
 
             if (fetchedAlbum.Name != model.Name.ToLower() && await AlbumNameExistsAsyn(model.Name))
@@ -106,20 +67,20 @@ namespace API.Controllers
             }
 
             // clear all existing Artists
-            foreach(var artist in fetchedAlbum.Artists)
+            foreach (var artist in fetchedAlbum.Artists)
             {
-                var fetchedArtistAlbumBridge = await _db.ArtistAlbumBridge
-                    .SingleOrDefaultAsync(x => x.ArtistId == artist.ArtistId && x.AlbumId == fetchedAlbum.Id);
-                _db.ArtistAlbumBridge.Remove(fetchedArtistAlbumBridge);
+                var fetchedArtistAlbumBridge = await UnitOfWork.ArtistAlbumBridgeRepo
+                    .GetFirstOrDefaultAsync(x => x.ArtistId == artist.ArtistId && x.AlbumId == fetchedAlbum.Id);
+                UnitOfWork.ArtistAlbumBridgeRepo.Remove(fetchedArtistAlbumBridge);
             }
 
-            await _db.SaveChangesAsync();
+            await UnitOfWork.CompleteAsync();
 
             fetchedAlbum.Name = model.Name.ToLower();
             fetchedAlbum.PhotoUrl = model.PhotoUrl;
 
             await AssignArtistsToAlbumAsync(fetchedAlbum.Id, model.ArtistIds);
-            await _db.SaveChangesAsync();
+            await UnitOfWork.CompleteAsync(); ;
 
             return NoContent();
         }
@@ -127,28 +88,28 @@ namespace API.Controllers
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var fetchedAlbum = await _db.Albums.Include(x => x.Artists).FirstOrDefaultAsync(x => x.Id == id);
+            var fetchedAlbum = await UnitOfWork.AlbumRepo.GetFirstOrDefaultAsync(x => x.Id == id, includeProperties: "Artists");
             if (fetchedAlbum == null) return NotFound();
 
             // clear all existing Artists
             foreach (var artist in fetchedAlbum.Artists)
             {
-                var fetchedArtistAlbumBridge = await _db.ArtistAlbumBridge
-                    .SingleOrDefaultAsync(x => x.ArtistId == artist.ArtistId && x.AlbumId == fetchedAlbum.Id);
-                _db.ArtistAlbumBridge.Remove(fetchedArtistAlbumBridge);
+                var fetchedArtistAlbumBridge = await UnitOfWork.ArtistAlbumBridgeRepo
+                     .GetFirstOrDefaultAsync(x => x.ArtistId == artist.ArtistId && x.AlbumId == fetchedAlbum.Id);
+                UnitOfWork.ArtistAlbumBridgeRepo.Remove(fetchedArtistAlbumBridge);
             }
 
-            await _db.SaveChangesAsync();
+            await UnitOfWork.CompleteAsync();
 
-            _db.Albums.Remove(fetchedAlbum);
-            await _db.SaveChangesAsync();
+            UnitOfWork.AlbumRepo.Remove(fetchedAlbum);
+            await UnitOfWork.CompleteAsync();
 
             return NoContent();
         }
 
         private async Task<bool> AlbumNameExistsAsyn(string albumName)
         {
-            return await _db.Albums.AnyAsync(x => x.Name == albumName.ToLower());
+            return await UnitOfWork.AlbumRepo.AnyAsync(x => x.Name == albumName.ToLower());
         }
 
         private async Task AssignArtistsToAlbumAsync(int albumId, List<int> artistIds)
@@ -158,7 +119,7 @@ namespace API.Controllers
 
             foreach (var artistId in artistIds)
             {
-                var artist = await _db.Artists.FindAsync(artistId);
+                var artist = await UnitOfWork.ArtistRepo.GetFirstOrDefaultAsync(x => x.Id == artistId);
                 if (artist != null)
                 {
                     var artistAlbumBridgeToAdd = new ArtistAlbumBridge
@@ -167,7 +128,7 @@ namespace API.Controllers
                         ArtistId = artistId
                     };
 
-                    _db.ArtistAlbumBridge.Add(artistAlbumBridgeToAdd);
+                    UnitOfWork.ArtistAlbumBridgeRepo.Add(artistAlbumBridgeToAdd);
                 }
             }
         }

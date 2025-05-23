@@ -7,7 +7,7 @@ namespace API.Data.DatabaseInit
 {
     public static class DbInitializer
     {
-        public static async Task InitializeAsync(ApplicationDb db)
+        public static async Task InitializeAsync(Context db)
         {
             if (db.Database.GetPendingMigrations().Count() > 0)
             {

@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace API.Data.Migratons
 {
-    [DbContext(typeof(ApplicationDb))]
+    [DbContext(typeof(Context))]
     [Migration("20231225023021_FirstModelCreation")]
     partial class FirstModelCreation
     {

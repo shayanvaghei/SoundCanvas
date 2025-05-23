@@ -14,48 +14,25 @@ namespace API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class TrackController : ControllerBase
+    public class TrackController : ApiCoreController
     {
-        private readonly ApplicationDb _db;
         private readonly IConfiguration _config;
 
-        public TrackController(ApplicationDb db, IConfiguration config)
+        public TrackController(Context db, IConfiguration config)
         {
-            _db = db;
             _config = config;
         }
 
         [HttpGet("get-all")]
         public async Task<ActionResult<List<TrackDto>>> GetAll()
         {
-            var tracks = await _db.Tracks
-                .Select(x => new TrackDto
-                {
-                    Id = x.Id,
-                    Name = x.Name,
-                    AlbumName = x.Album.Name,
-                    ArtistNames = x.Album.Artists.Select(a => a.Artist.Name).ToList(),
-                    ContentType = x.ContentType,
-                    Contents = x.Contents
-                }).ToListAsync();
-
-            return tracks;
+            return Ok(await  UnitOfWork.TrackRepo.GetAllTracksAsync());
         }
 
         [HttpGet("get-one/{id}")]
         public async Task<ActionResult<TrackDto>> GetOne(int id)
         {
-            var track = await _db.Tracks
-                .Where(x => x.Id == id)
-                .Select(x => new TrackDto
-                {
-                    Id = x.Id,
-                    Name = x.Name,
-                    AlbumName = x.Album.Name,
-                    ArtistNames = x.Album.Artists.Select(a => a.Artist.Name).ToList(),
-                    ContentType = x.ContentType,
-                    Contents = x.Contents
-                }).FirstOrDefaultAsync();
+            var track = await UnitOfWork.TrackRepo.GetTrackByIdAsync(id);
 
             if (track == null)
             {
@@ -68,7 +45,7 @@ namespace API.Controllers
         [HttpPost("create")]
         public async Task<IActionResult> Create(IFormFile file, [FromQuery] TrackAddEditDto model)
         {
-            var album = await _db.Albums.FindAsync(model.AlbumId);
+            var album = await UnitOfWork.AlbumRepo.GetFirstOrDefaultAsync(x => x.Id == model.AlbumId);
             if (album == null) return BadRequest("Invalid albumId");
 
             if (file == null || file.Length == 0)
@@ -95,8 +72,8 @@ namespace API.Controllers
                 Contents = GetFileContents(file)
             };
 
-            _db.Tracks.Add(trackToAdd);
-            await _db.SaveChangesAsync();
+            UnitOfWork.TrackRepo.Add(trackToAdd);
+            await UnitOfWork.CompleteAsync();
 
             return CreatedAtAction(nameof(GetOne), new { id = trackToAdd.Id }, null);
         }
@@ -104,10 +81,10 @@ namespace API.Controllers
         [HttpPut("update")]
         public async Task<IActionResult> Update(IFormFile file, [FromQuery] TrackAddEditDto model)
         {
-            var track = await _db.Tracks.FindAsync(model.Id);
+            var track = await UnitOfWork.TrackRepo.GetFirstOrDefaultAsync(x => x.Id == model.Id);
             if (track == null) return NotFound();
 
-            var album = await _db.Albums.FindAsync(model.AlbumId);
+            var album = await UnitOfWork.AlbumRepo.GetFirstOrDefaultAsync(x => x.Id == model.AlbumId);
             if (album == null) return BadRequest("Invalid albumId");
 
             if (file != null && file.Length > 0)
@@ -130,18 +107,18 @@ namespace API.Controllers
             track.Name = model.Name;
             track.AlbumId = model.AlbumId;
 
-            await _db.SaveChangesAsync();
+            await UnitOfWork.CompleteAsync();
             return NoContent();
         }
 
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var fetchedTrack = await _db.Tracks.FindAsync(id);
+            var fetchedTrack = await UnitOfWork.TrackRepo.GetFirstOrDefaultAsync(x => x.Id == id);
             if (fetchedTrack == null) return NotFound();
 
-            _db.Tracks.Remove(fetchedTrack);
-            await _db.SaveChangesAsync();
+            UnitOfWork.TrackRepo.Remove(fetchedTrack);
+            await UnitOfWork.CompleteAsync();
 
             return NoContent();
         }

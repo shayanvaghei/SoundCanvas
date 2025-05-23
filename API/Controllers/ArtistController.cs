@@ -1,54 +1,28 @@
 ﻿using API.Data;
 using API.DTOs;
 using API.Models;
+using API.Repo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace API.Controllers
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    public class ArtistController : ControllerBase
+    public class ArtistController : ApiCoreController
     {
-        private readonly ApplicationDb _db;
-
-        public ArtistController(ApplicationDb db)
-        {
-            _db = db;
-        }
-
         [HttpGet("get-all")]
-        public ActionResult<List<ArtistDto>> GetAll()
+        public async Task<ActionResult<List<ArtistDto>>> GetAll()
         {
-            var artists = _db.Artists
-                .Select(x => new ArtistDto
-                {
-                    Id = x.Id,
-                    Name = x.Name,
-                    PhotoUrl = x.PhotoUrl,
-                    Genre = x.Genre.Name
-                })
-                .ToList();
-
-            return artists;
+            return Ok(await UnitOfWork.ArtistRepo.GetAllArtistsAsync());
         }
 
         [HttpGet("get-one/{id}")]
-        public ActionResult<ArtistDto> GetOne(int id)
+        public async Task<ActionResult<ArtistDto>> GetOne(int id)
         {
-            var artist = _db.Artists
-                .Where(x => x.Id == id)
-                .Select(x => new ArtistDto
-                {
-                    Id = x.Id,
-                    Name = x.Name,
-                    PhotoUrl = x.PhotoUrl,
-                    Genre = x.Genre.Name,
-                    AlbumNames = x.Albums.Select(a => a.Album.Name).ToList()
-                }).FirstOrDefault();
+            var artist = await UnitOfWork.ArtistRepo.GetArtistByIdAsync(id);
 
             if (artist == null)
             {
@@ -59,14 +33,14 @@ namespace API.Controllers
         }
 
         [HttpPost("create")]
-        public IActionResult Create(ArtistAddEditDto model)
+        public async Task<IActionResult> Create(ArtistAddEditDto model)
         {
-            if (ArtisNameExists(model.Name))
+            if (await ArtisNameExistsAsync(model.Name))
             {
                 return BadRequest("Artist name should be unique");
             }
 
-            var fetchedGenre = GetGenreByName(model.Genre);
+            var fetchedGenre = await GetGenreByNameAsync(model.Genre);
             if (fetchedGenre == null)
             {
                 return BadRequest("Invalid genre name");
@@ -75,33 +49,31 @@ namespace API.Controllers
             var artistToAdd = new Artist
             {
                 Name = model.Name.ToLower(),
-                //Genre = fetchedGenre,
                 GenreId = fetchedGenre.Id,
                 PhotoUrl = model.PhotoUrl,
             };
 
-            _db.Artists.Add(artistToAdd);
-            _db.SaveChanges();
+            UnitOfWork.ArtistRepo.Add(artistToAdd);
+            await UnitOfWork.CompleteAsync();
 
-            //return NoContent();
             return CreatedAtAction(nameof(GetOne), new { id = artistToAdd.Id }, null);
         }
 
         [HttpPut("update")]
-        public IActionResult Update(ArtistAddEditDto model)
+        public async Task<IActionResult> Update(ArtistAddEditDto model)
         {
-            var fetchedArtist = _db.Artists.Find(model.Id);
+            var fetchedArtist = await UnitOfWork.ArtistRepo.GetFirstOrDefaultAsync(x => x.Id == model.Id);
             if (fetchedArtist == null)
             {
                 return NotFound();
             }
 
-            if (fetchedArtist.Name != model.Name.ToLower() && ArtisNameExists(model.Name))
+            if (fetchedArtist.Name != model.Name.ToLower() && ArtisNameExistsAsync(model.Name).GetAwaiter().GetResult())
             {
                 return BadRequest("Artist name should be unique");
             }
 
-            var fetchedGenre = GetGenreByName(model.Genre);
+            var fetchedGenre = await GetGenreByNameAsync(model.Genre);
             if (fetchedGenre == null)
             {
                 return BadRequest("Invalid genre name");
@@ -111,34 +83,34 @@ namespace API.Controllers
             fetchedArtist.Name = model.Name.ToLower();
             fetchedArtist.Genre = fetchedGenre;
             fetchedArtist.PhotoUrl = model.PhotoUrl;
-            _db.SaveChanges();
+            await UnitOfWork.CompleteAsync();
 
             return NoContent();
         }
 
         [HttpDelete("delete/{id}")]
-        public IActionResult Delete(int id)
+        public async Task<IActionResult> Delete(int id)
         {
-            var fetchedArtist = _db.Artists.Find(id);
+            var fetchedArtist = await UnitOfWork.ArtistRepo.GetFirstOrDefaultAsync(x => x.Id == id);
             if (fetchedArtist == null)
             {
                 return NotFound();
             }
 
-            _db.Artists.Remove(fetchedArtist);
-            _db.SaveChanges();
+            UnitOfWork.ArtistRepo.Remove(fetchedArtist);
+            await UnitOfWork.CompleteAsync();
 
             return NoContent();
         }
 
-        private bool ArtisNameExists(string name)
+        private async Task<bool> ArtisNameExistsAsync(string name)
         {
-            return _db.Artists.Any(x => x.Name.ToLower() == name.ToLower());
+            return await UnitOfWork.ArtistRepo.AnyAsync(x => x.Name.ToLower() == name.ToLower());
         }
 
-        private Genre GetGenreByName(string name)
+        private async Task<Genre> GetGenreByNameAsync(string name)
         {
-            return _db.Genres.SingleOrDefault(x => x.Name.ToLower() == name.ToLower());
+            return await UnitOfWork.GenreRepo.GetFirstOrDefaultAsync(x => x.Name.ToLower() == name.ToLower());
         }
     }
 }
